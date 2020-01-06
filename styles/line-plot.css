@@ -2,14 +2,14 @@ svg{
 border: 1px solid gray;
 }
 
-
 .grid{
 stroke: lightgrey;
 stroke-opacity: 0.2;
 shape-rendering: crispEdges;
 }
 
-.line-plot-header text tspan{
-font-size: 1em;
-fill: #555;
+.line-plot-header text{
+/* margin-left: 1em;
+padding-left: 2em;
+fill: #555; */
 }

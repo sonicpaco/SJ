@@ -1,140 +1,130 @@
-const privateComponents =
+export function plot(header, width = 300, height = 200)
 {
-    url: "",
-    header: "",
-    width: 500,
-    height: 300,
-    xPos: 0,
-    tPos: 0
+    return new Plot(header, width, height)
 }
 
-export function plot(url, header = url)
+class Plot
 {
-    return new Plot(url, header);
-}
-
-
-function Plot(url, header)
-{
-    let component = Object.create(privateComponents);
-    this.url = url
-    this.header = header;
-
-    this.setSize = function (width, height)
+    constructor(header, width, height)
     {
-        component.width = width;
-        component.height = height;
+        this.header = header;
+        this.width = width;
+        this.height = height;
+        this.url = "../data/test_data.dsv";
+
+        // store previous data
+        // used to prevent redrawing the same data.
+        this.serializedData = JSON.stringify({});
+
+        // set plot dimentions
+        this.margin = { top: 40, right: 20, bottom: 40, left: 40 };
+        this.chartWidth = this.width - this.margin.right - this.margin.left;
+        this.chartHeight = this.height - this.margin.top - this.margin.bottom;
+
+        // Draw the main elements of the chart.
+        this._drawChart();
+
+        // prevent issues with 'this' inside the Interval function.
+        const updatePlot = d => { return this._update(); }
+
+        // call update function periodically.
+        setInterval(function () { updatePlot() }, 2000);
+
+        // perform the first update.
+        updatePlot();
+
     }
 
-    this.setPosition = function (x, y)
+    _drawChart()
     {
-        component.xPos = x;
-        component.yPos = y;
+
+        // create the parent container.
+        const container = document.createElement('div');
+        container.id = this.header;
+        container.className = "plot";
+        document.body.appendChild(container);
+
+
+
+        // Draw chart containers svg element.
+        this.chartGroup = d3
+            .select(container)
+            .append("svg")
+            .attr("width", this.width)
+            .attr("height", this.height)
+            .append("g")
+            .attr("transform", `translate(${this.margin.left}, ${this.margin.top})`);
+
+        // group element containig the path element that draws the lines.
+        const chart = this.chartGroup.append("g").attr("class", "line-plot");
+
+        // Draw header.
+        const headerGroup = this.chartGroup
+            .append('g')
+            .attr('class', 'line-plot-header')
+            .attr('transform', `translate(${this.chartWidth * 0.3},${-this.margin.top * 1})`)
+            .append('text');
+
+        headerGroup
+            .append('tspan')
+            .attr('x', 0)
+            .attr('dy', '1.5em')
+            .text(this.header);
+
+        // create the group for the x axis.
+        this.xAxisElement = this.chartGroup
+            .append("g")
+            .attr("class", "xAxis-container")
+            .attr("transform", `translate(0, ${this.chartHeight})`);
+
+        // create the group for the y axis.
+        this.yAxisElement = this.chartGroup
+            .append("g")
+            .attr("class", "yAxis-container");
+
     }
 
-    Object.defineProperty(this, 'height',
-        { get: function () { return component.height; } }
-    );
 
-    Object.defineProperty(this, 'width',
-        { get: function () { return component.width; } }
-    );
-}
-
-Plot.prototype.generate = function ()
-{
-
-    // set plot dimentions
-    const margin = { top: 80, right: 60, bottom: 40, left: 60 };
-    const width = this.width - margin.right - margin.left;
-    const height = this.height - margin.top - margin.bottom;
-
-
-    let buffer = {};
-
-    // create the parent container.
-    const container = document.createElement('div');
-    container.id = this.header;
-    container.className = "plot";
-    document.body.appendChild(container);
-
-
-
-    // Draw chart containers elements.
-    const chartGroup = d3
-        .select(container)
-        .append("svg")
-        .attr("width", width + margin.right + margin.left)
-        .attr("height", height + margin.top + margin.bottom)
-        .append("g")
-        .attr("transform", `translate(${margin.left}, ${margin.top})`);
-
-
-    // Draw header.
-    const header = chartGroup
-        .append('g')
-        .attr('class', 'line-plot-header')
-        .attr('transform', `translate(0,${-margin.top * 0.6})`)
-        .append('text');
-
-    header
-        .append('tspan')
-        .attr('x', 0)
-        .attr('dy', '1.5em')
-        .text(this.header);
-
-
-
-    // create the group for the x axis.
-    const xAxisElement = chartGroup
-        .append("g")
-        .attr("class", "xAxis-container")
-        .attr("transform", `translate(0, ${height})`);
-
-    // create the group for the y axis.
-    const yAxisElement = chartGroup
-        .append("g")
-        .attr("class", "yAxis-container");
-
-
-    // group element containig the path element that draws the lines.
-    const chart = chartGroup.append("g").attr("class", "line-plot");
-
-
-    const url = `data/${this.url}`;
-
-    // Retreive the data.
-    // compare to the previous data
-    // do nothing if the data has not changed
-
-    setInterval(function ()
+    _update()
     {
-        d3.dsv(" ", url).then(data =>
+        console.log("updating");
+        d3.dsv(" ", "data/test_data.dsv").then(data =>
         {
-            for (let index = 0; index < data.length; index++)
-            {
-                data[index].sample = +data[index].sample;
-                data[index].value = +data[index].value;
-            }
-            //compare the data
-            if (buffer.length === data.length && JSON.stringify(data) === JSON.stringify(buffer))
-                console.log("same data values");
-            else
+            if (JSON.stringify(data) !== this.serializedData)
             {
                 console.log("new data set");
-                buffer = data;
-                renderChart(data);
-            }
+                // data is serialized before formating
+                this.serializedData = JSON.stringify(data);
+                for (let index = 0; index < data.length; index++)
+                {
+                    data[index].sample = +data[index].sample;
+                    data[index].value = +data[index].value;
+                }
+                this._generate(data);
+
+            } else
+                console.log("same data values");
         });
-    }, 2000);
+    }
 
 
-
-    function renderChart(data)
+    _generate(data) 
     {
-        //debugger;
 
-        //debugger;
+        // define x Scale function.
+        // scale the x values to the chart size
+        const xScale = d3
+            .scaleLinear()
+            .domain([0, data.length]) // the data range
+            .range([0, this.chartWidth]); // the scaled range
+
+
+        // define y Scale function.
+        // scale the y values to the chart size
+        const yScale = d3
+            .scaleLinear()
+            .domain(d3.extent(data.map(d => d.value)))
+            .range([this.chartHeight, 0]); // flip the coords as the data is display from bottom up.
 
 
         // create a Line generator.
@@ -145,43 +135,24 @@ Plot.prototype.generate = function ()
             .x(d => xScale(d.sample))
             .y(d => yScale(d.value));
 
-        // define x Scale function.
-        // scale the x values to the chart size
-        const xScale = d3
-            .scaleLinear()
-            .domain([0, data.length]) // the data range
-            .range([0, width]); // the scaled range
-
-
-        // define y Scale function.
-        // scale the y values to the chart size
-        const yScale = d3
-            .scaleLinear()
-            .domain(d3.extent(data.map(d => d.value)))
-            .range([height, 0]); // flip the coords as the data is display from bottom up.
-
-
-        // array to set xticks values.
-        // const xTickValues = data.map(d => d.sample);
 
         // set the xaxis to the bottom then render the xAxis group.
         //const xAxis = d3.axisBottom(xScale).tickValues(xTickValues);
-        const xAxis = d3.axisBottom(xScale);
-        xAxis(xAxisElement);
+        const xAxis = d3.axisBottom(xScale).ticks(8);
+        xAxis(this.xAxisElement);
 
         // set the yaxis to the left then render the yAxis group.
         const yAxis = d3.axisLeft(yScale);
-        yAxis(yAxisElement);
-
+        yAxis(this.yAxisElement);
 
         // create horizontal grid
         const xGridlines = d3
             .axisBottom(xScale)
             .ticks(20)
             .tickFormat("")
-            .tickSize(height);
+            .tickSize(this.chartHeight);
 
-        const xGripGroup = chartGroup
+        const xGripGroup = this.chartGroup
             .append('g')
             .attr('class', 'grid')
             .call(xGridlines);
@@ -193,45 +164,35 @@ Plot.prototype.generate = function ()
             .axisLeft(yScale)
             .ticks(20)
             .tickFormat("")
-            .tickSize(-width);
+            .tickSize(-this.chartWidth);
 
-        const yGripGroup = chartGroup
+        const yGripGroup = this.chartGroup
             .append('g')
             .attr('class', 'grid')
             .call(yGridlines);
 
         yGridlines(yGripGroup);
 
-
-
-
-
         //console.log(lineGen(data));
         //debugger;
 
+
         // remove previous path
-        chartGroup
+        this.chartGroup
             .select(".line-plot")
             .select("path")
             .remove();
 
-        chartGroup
+        console.log(data);
+
+        this.chartGroup
             .select(".line-plot")
             .data([data])
             .append("path")
             .attr("fill", "none")
             .attr("stroke", "blue")
             .attr("d", lineGen);
+
     }
-
-
-    // function drawPlot()
-    // {
-
-    // }
-
-
-
-
-
 }
+
